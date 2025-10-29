@@ -1,0 +1,36 @@
+{
+  "name": "fx-trader-pro",
+  "version": "1.0.0",
+  "description": "FXトレーダーPro - 初心者向けデイトレ支援アプリ（リスク管理 + AI分析）",
+  "main": "fx-server.js",
+  "scripts": {
+    "start": "node fx-server.js",
+    "dev": "nodemon fx-server.js",
+    "generate-vapid": "npx web-push generate-vapid-keys"
+  },
+  "keywords": [
+    "fx",
+    "forex",
+    "trading",
+    "daytrading",
+    "risk-management",
+    "push-notification",
+    "pwa",
+    "beginner-friendly"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "web-push": "^3.6.6",
+    "cors": "^2.8.5",
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
