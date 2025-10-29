@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="iOS PWA診断">
+    <title>iOS Safari PWA 診断ツール</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) 20px env(safe-area-inset-left);
+            padding-bottom: calc(20px + env(safe-area-inset-bottom));
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .card h2 {
+            color: #667eea;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-item {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-item.success {
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+        }
+        .status-item.error {
+            background: #f8d7da;
+            border-left: 5px solid #dc3545;
+        }
+        .status-item.warning {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+        }
+        .status-item.info {
+            background: #d1ecf1;
+            border-left: 5px solid #17a2b8;
+        }
+        .label {
+            font-weight: 600;
+        }
+        .value {
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: bold;
+            width: 100%;
+            margin: 10px 0;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+        .install-guide {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        .install-guide ol {
+            margin-left: 20px;
+            line-height: 2;
+        }
+        .emoji {
+            font-size: 1.5em;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="emoji">🍎</div>
+            <h1>iOS Safari PWA 診断</h1>
+            <p>iOSでのPWA動作をチェック</p>
+        </div>
+        
+        <!-- iOS環境チェック -->
+        <div class="card">
+            <h2>📱 iOS環境</h2>
+            <div id="ios-check"></div>
+        </div>
+        
+        <!-- PWA機能チェック -->
+        <div class="card">
+            <h2>⚙️ PWA機能</h2>
+            <div id="pwa-check"></div>
+        </div>
+        
+        <!-- API接続テスト -->
+        <div class="card">
+            <h2>🔌 API接続テスト</h2>
+            <button onclick="testAPIs()">APIをテスト</button>
+            <div id="api-results"></div>
+        </div>
+        
+        <!-- Service Worker状態 -->
+        <div class="card">
+            <h2>🔧 Service Worker</h2>
+            <div id="sw-status"></div>
+            <button onclick="checkServiceWorker()">状態を確認</button>
+        </div>
+        
+        <!-- インストールガイド -->
+        <div class="card">
+            <h2>📲 ホーム画面に追加する方法</h2>
+            <div class="install-guide">
+                <ol>
+                    <li><strong>共有アイコン</strong>をタップ <span class="emoji">⬆️</span></li>
+                    <li><strong>「ホーム画面に追加」</strong>を選択</li>
+                    <li><strong>「追加」</strong>をタップ</li>
+                    <li>ホーム画面からアプリを起動</li>
+                </ol>
+                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                    <strong>⚠️ 重要:</strong> PWAとして動作させるには、必ずホーム画面から起動してください。Safariのタブから開くと通常のWebサイトとして動作します。
+                </div>
+            </div>
+        </div>
+        
+        <!-- トラブルシューティング -->
+        <div class="card">
+            <h2>🔍 トラブルシューティング</h2>
+            <div id="troubleshooting"></div>
+        </div>
+        
+        <!-- ログ -->
+        <div class="card">
+            <h2>📝 診断ログ</h2>
+            <div id="log" style="max-height: 300px; overflow-y: auto;"></div>
+        </div>
+    </div>
+    
+    <script>
+        const log = [];
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString('ja-JP');
+            log.unshift({ time: timestamp, message, type });
+            updateLog();
+            console.log(`[${type}] ${message}`);
+        }
+        
+        function updateLog() {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML = log.slice(0, 20).map(l => 
+                `<div style="padding: 8px; margin: 5px 0; background: #f8f9fa; border-radius: 5px; font-size: 0.85em;">
+                    <strong>[${l.time}]</strong> ${l.message}
+                </div>`
+            ).join('');
+        }
+        
+        // iOS環境をチェック
+        function checkiOS() {
+            const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            const isStandalone = window.navigator.standalone === true || 
+                               window.matchMedia('(display-mode: standalone)').matches;
+            const hasTouch = 'ontouchstart' in window;
+            
+            addLog(`iOS: ${isiOS}, Safari: ${isSafari}, Standalone: ${isStandalone}`);
+            
+            const iosCheck = document.getElementById('ios-check');
+            iosCheck.innerHTML = `
+                <div class="status-item ${isiOS ? 'success' : 'warning'}">
+                    <span class="label">iOS端末</span>
+                    <span class="value">${isiOS ? '✅ はい' : '⚠️ いいえ'}</span>
+                </div>
+                <div class="status-item ${isSafari ? 'success' : 'warning'}">
+                    <span class="label">Safari</span>
+                    <span class="value">${isSafari ? '✅ はい' : '⚠️ いいえ'}</span>
+                </div>
+                <div class="status-item ${isStandalone ? 'success' : 'info'}">
+                    <span class="label">スタンドアロンモード</span>
+                    <span class="value">${isStandalone ? '✅ PWAモード' : 'ℹ️ ブラウザモード'}</span>
+                </div>
+                <div class="status-item ${hasTouch ? 'success' : 'warning'}">
+                    <span class="label">タッチ対応</span>
+                    <span class="value">${hasTouch ? '✅ はい' : '⚠️ いいえ'}</span>
+                </div>
+                <div class="status-item info">
+                    <span class="label">ユーザーエージェント</span>
+                    <span class="value" style="font-size: 0.75em;">${navigator.userAgent.substring(0, 50)}...</span>
+                </div>
+            `;
+            
+            if (!isStandalone) {
+                iosCheck.innerHTML += `
+                    <div style="margin-top: 15px; padding: 15px; background: #d1ecf1; border-radius: 8px; border-left: 5px solid #17a2b8;">
+                        <strong>ℹ️ ヒント:</strong> 現在はブラウザモードで動作しています。<br>
+                        PWA機能を完全に使用するには、ホーム画面に追加してそこから起動してください。
+                    </div>
+                `;
+            }
+        }
+        
+        // PWA機能をチェック
+        function checkPWAFeatures() {
+            const hasServiceWorker = 'serviceWorker' in navigator;
+            const hasFetch = typeof fetch !== 'undefined';
+            const hasCache = 'caches' in window;
+            const hasNotifications = 'Notification' in window;
+            const isHTTPS = window.location.protocol === 'https:';
+            const hasManifest = document.querySelector('link[rel="manifest"]');
+            
+            addLog(`PWA機能: SW=${hasServiceWorker}, Fetch=${hasFetch}, Cache=${hasCache}`);
+            
+            const pwaCheck = document.getElementById('pwa-check');
+            pwaCheck.innerHTML = `
+                <div class="status-item ${isHTTPS ? 'success' : 'error'}">
+                    <span class="label">HTTPS</span>
+                    <span class="value">${isHTTPS ? '✅ 有効' : '❌ 無効（必須）'}</span>
+                </div>
+                <div class="status-item ${hasServiceWorker ? 'success' : 'error'}">
+                    <span class="label">Service Worker</span>
+                    <span class="value">${hasServiceWorker ? '✅ サポート' : '❌ 非サポート'}</span>
+                </div>
+                <div class="status-item ${hasFetch ? 'success' : 'error'}">
+                    <span class="label">Fetch API</span>
+                    <span class="value">${hasFetch ? '✅ サポート' : '❌ 非サポート'}</span>
+                </div>
+                <div class="status-item ${hasCache ? 'success' : 'warning'}">
+                    <span class="label">Cache API</span>
+                    <span class="value">${hasCache ? '✅ サポート' : '⚠️ 非サポート'}</span>
+                </div>
+                <div class="status-item ${hasNotifications ? 'success' : 'warning'}">
+                    <span class="label">通知</span>
+                    <span class="value">${hasNotifications ? '✅ サポート' : '⚠️ 非サポート'}</span>
+                </div>
+                <div class="status-item ${hasManifest ? 'success' : 'warning'}">
+                    <span class="label">Manifest</span>
+                    <span class="value">${hasManifest ? '✅ 検出' : '⚠️ 未検出'}</span>
+                </div>
+            `;
+            
+            if (!isHTTPS) {
+                pwaCheck.innerHTML += `
+                    <div class="test-result" style="background: #f8d7da; color: #721c24;">
+                        <strong>❌ エラー:</strong> HTTPSが必要です。PWAはHTTPSでのみ動作します。
+                    </div>
+                `;
+            }
+        }
+        
+        // Service Worker状態をチェック
+        async function checkServiceWorker() {
+            const statusDiv = document.getElementById('sw-status');
+            
+            if (!('serviceWorker' in navigator)) {
+                statusDiv.innerHTML = '<div class="test-result" style="background: #f8d7da;">❌ Service Workerは非サポート</div>';
+                addLog('Service Worker非サポート', 'error');
+                return;
+            }
+            
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                addLog(`Service Worker登録数: ${registrations.length}`);
+                
+                if (registrations.length === 0) {
+                    statusDiv.innerHTML = `
+                        <div class="test-result" style="background: #fff3cd;">
+                            ℹ️ Service Workerは登録されていません<br>
+                            <small>メインアプリを開くと自動的に登録されます</small>
+                        </div>
+                    `;
+                } else {
+                    let html = '';
+                    registrations.forEach((reg, i) => {
+                        const state = reg.active ? reg.active.state : 'none';
+                        const scope = reg.scope;
+                        html += `
+                            <div class="test-result" style="background: #d4edda;">
+                                ✅ Service Worker ${i + 1}<br>
+                                <small>状態: ${state}</small><br>
+                                <small>スコープ: ${scope}</small>
+                            </div>
+                        `;
+                        addLog(`SW ${i + 1}: ${state}, ${scope}`);
+                    });
+                    statusDiv.innerHTML = html;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="test-result" style="background: #f8d7da;">❌ エラー: ${error.message}</div>`;
+                addLog(`Service Worker確認エラー: ${error.message}`, 'error');
+            }
+        }
+        
+        // API接続をテスト
+        async function testAPIs() {
+            const resultsDiv = document.getElementById('api-results');
+            resultsDiv.innerHTML = '<div class="test-result" style="background: #fff3cd;">🔄 テスト中...</div>';
+            addLog('APIテスト開始');
+            
+            const apis = [
+                { name: 'Frankfurter', url: 'https://api.frankfurter.app/latest?from=JPY' },
+                { name: 'ExchangeRate-API', url: 'https://api.exchangerate-api.com/v4/latest/JPY' }
+            ];
+            
+            let html = '';
+            let successCount = 0;
+            
+            for (const api of apis) {
+                try {
+                    addLog(`${api.name} テスト中...`);
+                    const start = Date.now();
+                    const response = await Promise.race([
+                        fetch(api.url),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+                    ]);
+                    const elapsed = Date.now() - start;
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const ratesCount = Object.keys(data.rates).length;
+                        successCount++;
+                        
+                        html += `
+                            <div class="test-result" style="background: #d4edda;">
+                                <strong>✅ ${api.name}</strong><br>
+                                応答時間: ${elapsed}ms<br>
+                                通貨数: ${ratesCount}<br>
+                                USD/JPY: ${data.rates.USD ? (1/data.rates.USD).toFixed(3) : 'N/A'}
+                            </div>
+                        `;
+                        addLog(`${api.name} 成功 (${elapsed}ms)`);
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    html += `
+                        <div class="test-result" style="background: #f8d7da;">
+                            <strong>❌ ${api.name}</strong><br>
+                            エラー: ${error.message}
+                        </div>
+                    `;
+                    addLog(`${api.name} 失敗: ${error.message}`, 'error');
+                }
+            }
+            
+            html = `<div class="test-result" style="background: #d1ecf1;">
+                        <strong>結果: ${successCount}/${apis.length} 成功</strong>
+                    </div>` + html;
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // トラブルシューティング情報を表示
+        function showTroubleshooting() {
+            const isStandalone = window.navigator.standalone === true || 
+                               window.matchMedia('(display-mode: standalone)').matches;
+            const troubleshootingDiv = document.getElementById('troubleshooting');
+            
+            let issues = [];
+            
+            if (!isStandalone) {
+                issues.push({
+                    title: 'PWAモードで動作していない',
+                    solution: 'ホーム画面に追加して、そこから起動してください'
+                });
+            }
+            
+            if (window.location.protocol !== 'https:') {
+                issues.push({
+                    title: 'HTTPSではない',
+                    solution: 'HTTPSでアクセスしてください（必須）'
+                });
+            }
+            
+            if (!('serviceWorker' in navigator)) {
+                issues.push({
+                    title: 'Service Worker非サポート',
+                    solution: 'iOSのバージョンを確認してください（iOS 11.3以降が必要）'
+                });
+            }
+            
+            if (issues.length === 0) {
+                troubleshootingDiv.innerHTML = `
+                    <div class="status-item success">
+                        <span>✅ 問題は検出されませんでした</span>
+                    </div>
+                `;
+            } else {
+                troubleshootingDiv.innerHTML = issues.map(issue => `
+                    <div style="margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 5px solid #ffc107;">
+                        <strong>⚠️ ${issue.title}</strong><br>
+                        <span style="font-size: 0.9em;">💡 ${issue.solution}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        // 初期化
+        window.addEventListener('load', () => {
+            addLog('診断ツール起動');
+            checkiOS();
+            checkPWAFeatures();
+            checkServiceWorker();
+            showTroubleshooting();
+        });
+    </script>
+</body>
+</html>
