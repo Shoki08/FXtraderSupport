@@ -155,18 +155,21 @@ async function fetchExchangeRates() {
     updateApiStatus('loading', '🔄 為替レート取得中...');
     
     try {
-        // ExchangeRate-API（無料版）を使用
+        // 複数のAPIから取得を試行
         const baseRates = await fetchFromExchangeRateAPI();
         
-        if (!baseRates) {
+        if (!baseRates || Object.keys(baseRates).length === 0) {
             throw new Error('APIからのデータ取得失敗');
         }
         
         // 各通貨ペアのレートを計算
+        let successCount = 0;
         CURRENCY_PAIRS.forEach(pair => {
             const rate = calculatePairRate(pair, baseRates);
             
             if (rate) {
+                successCount++;
+                
                 // 価格履歴を保存
                 if (!priceHistory[pair.id]) priceHistory[pair.id] = [];
                 priceHistory[pair.id].push({
@@ -196,47 +199,120 @@ async function fetchExchangeRates() {
             }
         });
         
-        updateApiStatus('success', `✅ ${Object.keys(pairData).length}通貨ペア取得完了`);
-        updateUI();
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('pairs-container').style.display = 'grid';
+        if (successCount > 0) {
+            updateUI();
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('pairs-container').style.display = 'grid';
+            console.log(`✅ ${successCount}通貨ペア取得完了`);
+        } else {
+            throw new Error('有効な通貨ペアデータなし');
+        }
         
     } catch (error) {
         console.error('❌ 為替レート取得エラー:', error);
-        updateApiStatus('error', '⚠️ データ取得エラー');
-        showError('為替レートの取得に失敗しました。しばらく待ってから再試行してください。');
+        
+        // エラーでも最低限のUI表示
+        if (Object.keys(pairData).length > 0) {
+            // 以前のデータがあれば表示
+            updateApiStatus('error', '⚠️ 最新データ取得失敗（前回データ表示中）');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('pairs-container').style.display = 'grid';
+        } else {
+            // データがない場合はエラー表示
+            updateApiStatus('error', '⚠️ データ取得エラー');
+            document.getElementById('loading').innerHTML = `
+                <div style="color: #ef4444;">
+                    <strong>❌ 為替レート取得エラー</strong><br>
+                    <p style="margin: 20px 0;">以下を確認してください：</p>
+                    <ul style="text-align: left; display: inline-block; line-height: 1.8;">
+                        <li>インターネット接続</li>
+                        <li>HTTPSでの接続（http://ではなくhttps://）</li>
+                        <li>ブラウザのコンソールでエラー確認</li>
+                    </ul>
+                    <button onclick="location.reload()" style="margin-top: 20px; padding: 12px 24px; background: #1a5f7a; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1em;">
+                        🔄 再読み込み
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
-// ExchangeRate-APIからデータ取得
+// 為替レート取得（複数APIのフォールバック対応）
 async function fetchFromExchangeRateAPI() {
+    // API1: Frankfurter（完全無料・CORS対応）
     try {
-        // 無料版は1ヶ月1500リクエストまで
-        const response = await fetch('https://api.exchangerate-api.com/v4/latest/JPY', {
-            timeout: 10000
-        });
+        console.log('📡 Frankfurter APIで取得試行...');
+        const response = await Promise.race([
+            fetch('https://api.frankfurter.app/latest?from=JPY'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+        ]);
         
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-        
-        const data = await response.json();
-        return data.rates;
-        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Frankfurter APIから取得成功');
+            return data.rates;
+        }
     } catch (error) {
-        console.error('ExchangeRate-API エラー:', error);
-        
-        // フォールバック: 固定レート（デモ用）
-        return getFallbackRates();
+        console.warn('⚠️ Frankfurter API失敗:', error.message);
     }
+    
+    // API2: ExchangeRate.host（完全無料・CORS対応）
+    try {
+        console.log('📡 ExchangeRate.host APIで取得試行...');
+        const response = await Promise.race([
+            fetch('https://api.exchangerate.host/latest?base=JPY'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+        ]);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.rates) {
+                console.log('✅ ExchangeRate.host APIから取得成功');
+                return data.rates;
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ ExchangeRate.host API失敗:', error.message);
+    }
+    
+    // API3: ExchangeRate-API
+    try {
+        console.log('📡 ExchangeRate-APIで取得試行...');
+        const response = await Promise.race([
+            fetch('https://api.exchangerate-api.com/v4/latest/JPY'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+        ]);
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ ExchangeRate-APIから取得成功');
+            return data.rates;
+        }
+    } catch (error) {
+        console.warn('⚠️ ExchangeRate-API失敗:', error.message);
+    }
+    
+    // すべて失敗した場合: デモレートを使用
+    console.warn('⚠️ すべてのAPIが失敗、デモレートを使用');
+    return getFallbackRates();
 }
 
-// フォールバック用の固定レート
+// フォールバック用の固定レート（実際の相場に近い値）
 function getFallbackRates() {
-    console.warn('⚠️ フォールバックレートを使用');
+    console.warn('⚠️ デモモードで動作中（実際のレートではありません）');
+    
+    // デモモード表示を更新
+    updateApiStatus('success', '⚠️ デモモードで動作中（練習用データ）');
+    
+    // 2024年10月現在の概算レート
     return {
-        USD: 0.0067,  // 1円 = 0.0067ドル → 1ドル = 149円
-        EUR: 0.0062,  // 1円 = 0.0062ユーロ → 1ユーロ = 161円
-        GBP: 0.0053,  // 1円 = 0.0053ポンド → 1ポンド = 189円
-        AUD: 0.0103,  // 1円 = 0.0103豪ドル → 1豪ドル = 97円
+        USD: 0.00671,  // 1円 = 0.00671ドル → 1ドル = 149円
+        EUR: 0.00617,  // 1円 = 0.00617ユーロ → 1ユーロ = 162円
+        GBP: 0.00528,  // 1円 = 0.00528ポンド → 1ポンド = 189円
+        AUD: 0.01025,  // 1円 = 0.01025豪ドル → 1豪ドル = 97.5円
+        CHF: 0.00586,  // 1円 = 0.00586フラン → 1フラン = 170円
+        CAD: 0.00924,  // 1円 = 0.00924カナダドル → 1カナダドル = 108円
     };
 }
 
